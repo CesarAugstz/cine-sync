@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import VideoPlayer from '@/components/video-player'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { Movie, SubtitleTrack } from '@/types/movie'
 import { useParams } from 'next/navigation'
+import VideoPlayer from '@/components/video-player/video-player'
 
 export default function MoviePage() {
   const [movie, setMovie] = useState<Movie | null>(null)
