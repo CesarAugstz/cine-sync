@@ -67,17 +67,35 @@ export function useVideoSeek({
 
         video.currentTime = targetTime
         setCurrentTime(targetTime)
-        setNeedsRecovery(false)
-        isRecoveringRef.current = false
 
-        if (wasPlaying) {
-          console.log('[DEBUG] Resuming playback after recovery')
-          video
-            .play()
-            .catch(err =>
-              console.error('[DEBUG] Play error after recovery:', err),
-            )
-        }
+        setTimeout(() => {
+          if (video.readyState >= 3) {
+            console.log('[DEBUG] Video ready, completing recovery')
+            setNeedsRecovery(false)
+            isRecoveringRef.current = false
+
+            if (!wasPlaying) return
+            console.log('[DEBUG] Resuming playback after recovery')
+            video
+              .play()
+              .catch(err =>
+                console.error('[DEBUG] Play error after recovery:', err),
+              )
+
+            return
+          }
+          console.log('[DEBUG] Video not ready yet, waiting longer')
+          setTimeout(() => {
+            setNeedsRecovery(false)
+            isRecoveringRef.current = false
+            if (!wasPlaying) return
+            video
+              .play()
+              .catch(err =>
+                console.error('[DEBUG] Play error after recovery:', err),
+              )
+          }, 500)
+        }, 100)
       }
 
       video.addEventListener('canplay', handleRecovery)

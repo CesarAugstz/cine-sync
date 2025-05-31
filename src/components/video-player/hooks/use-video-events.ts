@@ -53,7 +53,8 @@ export function useVideoEvents({
     }
 
     const updateDuration = () => setDuration(video.duration)
-    const handleFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement)
+    const handleFullscreenChange = () =>
+      setIsFullscreen(!!document.fullscreenElement)
     const handlePlay = () => setIsPlaying(true)
     const handlePause = () => setIsPlaying(false)
     const handleSeeked = () => handleVideoSeeked(video)
