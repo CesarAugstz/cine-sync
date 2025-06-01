@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Movie, SubtitleTrack } from '@/types/movie'
 import { useParams } from 'next/navigation'
 import VideoPlayer from '@/components/video-player/video-player'
+import RoomManager from '@/components/room/room-manager'
 
 export default function MoviePage() {
   const [movie, setMovie] = useState<Movie | null>(null)
@@ -78,11 +79,21 @@ export default function MoviePage() {
         </Link>
       </div>
       
-      <VideoPlayer 
-        src={videoSrc}
-        title={movie.title}
-        subtitles={subtitleTracks}
-      />
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 p-4">
+        <div className="xl:col-span-3">
+          <VideoPlayer 
+            src={videoSrc}
+            title={movie.title}
+            subtitles={subtitleTracks}
+          />
+        </div>
+        
+        <div className="xl:col-span-1">
+          <div className="sticky top-4">
+            <RoomManager />
+          </div>
+        </div>
+      </div>
       
       <div className="p-4 text-white">
         <h1 className="text-2xl font-bold mb-2">{movie.title}</h1>
