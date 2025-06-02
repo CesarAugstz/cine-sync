@@ -9,11 +9,6 @@ export interface Room {
   name: string
   users: User[]
   createdAt: string
-  videoState: {
-    isPlaying: boolean
-    currentTime: number
-    lastUpdate: string
-  }
 }
 
 export interface RoomState {

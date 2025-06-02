@@ -1,44 +1,30 @@
-import { useState, useRef, useCallback } from 'react'
+'use client'
 
-interface Notification {
+import { useState, useCallback } from 'react'
+
+interface NotificationState {
   show: boolean
   message: string
-  type: 'forward' | 'backward'
+  type: 'info' | 'success' | 'error'
 }
 
 export function useVideoNotifications() {
-  const notificationTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const [notification, setNotification] = useState<Notification>({
+  const [notification, setNotification] = useState<NotificationState>({
     show: false,
     message: '',
-    type: 'forward',
+    type: 'info'
   })
 
-  const showNotification = useCallback(
-    (message: string, type: 'forward' | 'backward') => {
-      if (notificationTimeoutRef.current) {
-        clearTimeout(notificationTimeoutRef.current)
-      }
-
-      setNotification({
-        show: true,
-        message,
-        type,
-      })
-
-      notificationTimeoutRef.current = setTimeout(() => {
-        setNotification(prev => ({
-          ...prev,
-          show: false,
-        }))
-      }, 1500)
-    },
-    [],
-  )
+  const showNotification = useCallback((message: string, type: 'info' | 'success' | 'error' = 'info') => {
+    setNotification({ show: true, message, type })
+    
+    setTimeout(() => {
+      setNotification(prev => ({ ...prev, show: false }))
+    }, 3000)
+  }, [])
 
   return {
     notification,
-    showNotification,
-    notificationTimeoutRef,
+    showNotification
   }
 }

@@ -1,85 +1,154 @@
-import { useState, useCallback } from 'react'
-import { Room, User, RoomState } from '@/types/room'
-import { useWebSocketMock } from './use-websocket-mock'
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { io, Socket } from 'socket.io-client'
+
+interface User {
+  id: string
+  name: string
+  joinedAt: number
+}
+
+interface Room {
+  id: string
+  name: string
+  hostId: string
+  users: User[]
+  createdAt: number
+}
+
+interface RoomState {
+  currentRoom: Room | null
+  isConnected: boolean
+}
 
 export function useRoomState() {
   const [roomState, setRoomState] = useState<RoomState>({
     currentRoom: null,
     isConnected: false,
-    currentUser: null
   })
   const [isLoading, setIsLoading] = useState(false)
+  const [socket, setSocket] = useState<Socket | null>(null)
 
-  const { 
-    isConnected, 
-    connect, 
-    disconnect, 
-    createRoom, 
-    joinRoom, 
-    leaveRoom, 
-    emitVideoControl 
-  } = useWebSocketMock()
+  useEffect(() => {
+    if (socket) return
 
-  const handleCreateRoom = useCallback(async (roomName: string, userName: string) => {
-    setIsLoading(true)
-    try {
-      connect()
-      const room = await createRoom(roomName, userName)
-      const currentUser = room.users.find(user => user.name === userName) || null
-      
-      setRoomState({
-        currentRoom: room,
-        isConnected: true,
-        currentUser
-      })
-      
-      return room
-    } finally {
-      setIsLoading(false)
+    const newSocket = io()
+    setSocket(newSocket)
+
+    newSocket.on('connect', () => {
+      setRoomState(prev => ({ ...prev, isConnected: true }))
+    })
+
+    newSocket.on('disconnect', () => {
+      setRoomState(prev => ({ ...prev, isConnected: false }))
+    })
+
+    newSocket.on('user_joined', (data: { user: User; room: Room }) => {
+      console.log('user_joined', data)
+      setRoomState(prev => ({ ...prev, currentRoom: data.room }))
+    })
+
+    newSocket.on('user_left', (data: { room: Room }) => {
+      setRoomState(prev => ({ ...prev, currentRoom: data.room }))
+    })
+
+    newSocket.on('host_changed', (data: { room: Room }) => {
+      setRoomState(prev => ({ ...prev, currentRoom: data.room }))
+    })
+
+    newSocket.on('user_disconnected', (data: { room: Room }) => {
+      setRoomState(prev => ({ ...prev, currentRoom: data.room }))
+    })
+
+    return () => {
+      newSocket.close()
+      newSocket.removeAllListeners()
     }
-  }, [createRoom, connect])
+  }, [socket])
 
-  const handleJoinRoom = useCallback(async (roomId: string, userName: string) => {
-    setIsLoading(true)
-    try {
-      connect()
-      const room = await joinRoom(roomId, userName)
-      const currentUser = room.users.find(user => user.name === userName) || null
-      
-      setRoomState({
-        currentRoom: room,
-        isConnected: true,
-        currentUser
+  const handleCreateRoom = useCallback(
+    async (roomName: string, userName: string): Promise<boolean> => {
+      if (!socket) return false
+
+      setIsLoading(true)
+
+      return new Promise(resolve => {
+        const timeoutId = setTimeout(() => {
+          setIsLoading(false)
+          resolve(false)
+        }, 5000)
+
+        socket.emit('create_room', { roomName, userName })
+
+        socket.once(
+          'create_room_response',
+          (response: { success: boolean; data?: Room; error?: string }) => {
+            clearTimeout(timeoutId)
+            setIsLoading(false)
+
+            if (response.success && response.data) {
+              setRoomState(prev => ({ ...prev, currentRoom: response.data! }))
+              resolve(true)
+            } else {
+              console.error('Failed to create room:', response.error)
+              resolve(false)
+            }
+          },
+        )
       })
-      
-      return room
-    } finally {
-      setIsLoading(false)
-    }
-  }, [joinRoom, connect])
+    },
+    [socket],
+  )
+
+  const handleJoinRoom = useCallback(
+    async (roomId: string, userName: string): Promise<boolean> => {
+      if (!socket) return false
+
+      setIsLoading(true)
+
+      return new Promise(resolve => {
+        const timeoutId = setTimeout(() => {
+          setIsLoading(false)
+          resolve(false)
+        }, 5000)
+
+        socket.emit('join_room', { roomId, userName })
+
+        socket.once(
+          'join_room_response',
+          (response: { success: boolean; data?: Room; error?: string }) => {
+            clearTimeout(timeoutId)
+            setIsLoading(false)
+
+            if (response.success && response.data) {
+              setRoomState(prev => ({ ...prev, currentRoom: response.data! }))
+              resolve(true)
+            } else {
+              console.error('Failed to join room:', response.error)
+              resolve(false)
+            }
+          },
+        )
+      })
+    },
+    [socket],
+  )
 
   const handleLeaveRoom = useCallback(() => {
-    leaveRoom()
-    disconnect()
-    setRoomState({
-      currentRoom: null,
-      isConnected: false,
-      currentUser: null
-    })
-  }, [leaveRoom, disconnect])
+    if (!socket || !roomState.currentRoom) return
+
+    socket.emit('leave_room', { roomId: roomState.currentRoom.id })
+    setRoomState(prev => ({ ...prev, currentRoom: null }))
+  }, [socket, roomState.currentRoom])
 
   const handleCopyRoomId = useCallback(() => {
     if (!roomState.currentRoom) return
-    
-    navigator.clipboard.writeText(roomState.currentRoom.id)
-      .then(() => console.log('Room ID copied'))
-      .catch(() => console.error('Failed to copy room ID'))
-  }, [roomState.currentRoom])
 
-  const handleVideoControl = useCallback((action: string, data: any) => {
-    if (!roomState.isConnected) return
-    emitVideoControl(action, data)
-  }, [roomState.isConnected, emitVideoControl])
+    navigator.clipboard.writeText(roomState.currentRoom.id).catch(err => {
+      console.error('Failed to copy room ID:', err)
+    })
+  }, [roomState.currentRoom])
 
   return {
     roomState,
@@ -88,6 +157,5 @@ export function useRoomState() {
     handleJoinRoom,
     handleLeaveRoom,
     handleCopyRoomId,
-    handleVideoControl
   }
 }

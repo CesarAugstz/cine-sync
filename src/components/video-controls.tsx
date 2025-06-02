@@ -11,15 +11,16 @@ import {
   SkipForward,
   SkipBack,
   VolumeX,
+  RefreshCw,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import SubtitleSettings from './subtitle-settings'
 import { SubtitleTrack } from '@/types/movie'
+import { useRoomStore } from '@/stores/room-store'
 
 interface VideoControlsProps {
   isPlaying: boolean
-  currentTime: number
   duration: number
   volume: number
   isFullscreen: boolean
@@ -29,6 +30,7 @@ interface VideoControlsProps {
   subtitles: SubtitleTrack[]
   isEnabled: boolean
   isSeeking?: boolean
+  isPending?: boolean
   onPlay: () => void
   onSkipForward: () => void
   onSkipBackward: () => void
@@ -37,6 +39,7 @@ interface VideoControlsProps {
   onToggleFullscreen: () => void
   onToggleSubtitles: () => void
   onToggleMute: () => void
+  onSyncWithRoom?: () => void
 }
 
 const formatTime = (seconds: number): string => {
@@ -56,7 +59,6 @@ const formatTime = (seconds: number): string => {
 
 export default function VideoControls({
   isPlaying,
-  currentTime,
   duration,
   volume,
   isFullscreen,
@@ -66,6 +68,7 @@ export default function VideoControls({
   subtitles,
   isEnabled,
   isSeeking = false,
+  isPending = false,
   onPlay,
   onSkipForward,
   onSkipBackward,
@@ -74,11 +77,14 @@ export default function VideoControls({
   onToggleFullscreen,
   onToggleSubtitles,
   onToggleMute,
+  onSyncWithRoom,
 }: VideoControlsProps) {
   const [hoverTime, setHoverTime] = useState<number | null>(null)
   const [hoverPosition, setHoverPosition] = useState<number>(0)
   const [isHovering, setIsHovering] = useState(false)
   const sliderRef = useRef<HTMLDivElement>(null)
+
+  const { currentRoom, isConnected } = useRoomStore()
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
@@ -101,6 +107,8 @@ export default function VideoControls({
     setHoverTime(null)
   }, [])
 
+  const isDisabled = isSeeking || isPending
+
   return (
     <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 z-10">
       <div className="flex items-center space-x-4">
@@ -108,7 +116,7 @@ export default function VideoControls({
           variant="ghost"
           size="icon"
           onClick={onSkipBackward}
-          disabled={isSeeking}
+          disabled={isDisabled}
           className="text-white hover:text-gray-300 hover:bg-white/10 transition-colors disabled:opacity-50"
           title="Skip backward 15s"
         >
@@ -119,7 +127,7 @@ export default function VideoControls({
           variant="ghost"
           size="icon"
           onClick={onPlay}
-          disabled={isSeeking}
+          disabled={isDisabled}
           className="text-white hover:text-gray-300 hover:bg-white/10 transition-colors disabled:opacity-50"
         >
           {isPlaying ? <Pause size={24} /> : <Play size={24} />}
@@ -129,7 +137,7 @@ export default function VideoControls({
           variant="ghost"
           size="icon"
           onClick={onSkipForward}
-          disabled={isSeeking}
+          disabled={isDisabled}
           className="text-white hover:text-gray-300 hover:bg-white/10 transition-colors disabled:opacity-50"
           title="Skip forward 15s"
         >
@@ -148,7 +156,7 @@ export default function VideoControls({
               onValueChange={onSeek}
               max={100}
               step={0.1}
-              disabled={isSeeking || !duration}
+              disabled={isDisabled || !duration}
               className="w-full cursor-pointer"
             />
 
@@ -212,6 +220,18 @@ export default function VideoControls({
             </Button>
             <SubtitleSettings tracks={subtitles} />
           </>
+        )}
+
+        {currentRoom && isConnected && onSyncWithRoom && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onSyncWithRoom}
+            className="text-white hover:text-gray-300 hover:bg-white/10 transition-colors"
+            title="Sync with room"
+          >
+            <RefreshCw size={20} />
+          </Button>
         )}
 
         <Button

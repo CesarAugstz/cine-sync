@@ -1,3 +1,5 @@
+'use client'
+
 import { useEffect, useCallback } from 'react'
 
 interface UseVideoKeyboardProps {
@@ -6,7 +8,7 @@ interface UseVideoKeyboardProps {
   onSkipBackward: () => void
   onToggleFullscreen: () => void
   onToggleMute: () => void
-  onVolumeChange: (delta: number) => void
+  onVolumeChange: (direction: 'up' | 'down') => void
   disabled?: boolean
 }
 
@@ -23,6 +25,7 @@ export function useVideoKeyboard({
     (e: KeyboardEvent) => {
       if (disabled) return
 
+      // Don't trigger shortcuts when typing in inputs
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return
       }
@@ -50,11 +53,11 @@ export function useVideoKeyboard({
           break
         case 'ArrowUp':
           e.preventDefault()
-          onVolumeChange(0.1)
+          onVolumeChange('up')
           break
         case 'ArrowDown':
           e.preventDefault()
-          onVolumeChange(-0.1)
+          onVolumeChange('down')
           break
         case 'KeyJ':
           e.preventDefault()

@@ -15,17 +15,15 @@ export default function VideoLoadingOverlay({
 }: VideoLoadingOverlayProps) {
   if (!isLoading && !isSeeking && !needsRecovery) return null
 
+  let message = 'Loading...'
+  if (isSeeking) message = 'Seeking...'
+  if (needsRecovery) message = 'Recovering video...'
+
   return (
-    <div className="absolute inset-0 flex items-center justify-center bg-black/30 z-20 pointer-events-none">
-      <div className="flex items-center space-x-3 bg-black/80 text-white px-6 py-3 rounded-lg backdrop-blur-sm border border-white/20">
-        <Loader2 size={24} className="animate-spin" />
-        <span className="text-sm font-medium">
-          {needsRecovery
-            ? 'Recovering...'
-            : isSeeking
-            ? 'Seeking...'
-            : 'Loading...'}
-        </span>
+    <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-20">
+      <div className="flex flex-col items-center space-y-4">
+        <Loader2 className="h-8 w-8 text-white animate-spin" />
+        <span className="text-white text-sm">{message}</span>
       </div>
     </div>
   )

@@ -7,6 +7,7 @@ import RoomCreator from './room-creator'
 import RoomJoiner from './room-joiner'
 import RoomControls from './room-controls'
 import { useRoomState } from '@/hooks/use-room-state'
+import { Room } from '@/types/room'
 
 type RoomView = 'menu' | 'create' | 'join'
 
@@ -24,7 +25,7 @@ export default function RoomManager() {
   if (roomState.currentRoom) {
     return (
       <RoomControls
-        room={roomState.currentRoom}
+        room={roomState.currentRoom as unknown as Room}
         onLeaveRoom={handleLeaveRoom}
         onCopyRoomId={handleCopyRoomId}
       />
