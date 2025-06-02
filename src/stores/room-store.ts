@@ -18,6 +18,7 @@ interface Room {
 interface RoomStore {
   socket: Socket | null
   currentRoom: Room | null
+  lastRoomId: string | null
   isConnected: boolean
   isLoading: boolean
   userName: string
@@ -41,6 +42,7 @@ export const useRoomStore = create<RoomStore>()(
       isConnected: false,
       isLoading: false,
       userName: '',
+      lastRoomId: null,
 
       setUserName: userName => set({ userName }),
 
@@ -52,18 +54,6 @@ export const useRoomStore = create<RoomStore>()(
 
         newSocket.on('connect', () => {
           set({ isConnected: true })
-        })
-
-        newSocket.on('disconnect', () => {
-          set({ isConnected: false, currentRoom: null })
-        })
-
-        newSocket.on('room_created', (room: Room) => {
-          set({ currentRoom: room, isLoading: false })
-        })
-
-        newSocket.on('room_joined', (room: Room) => {
-          set({ currentRoom: room, isLoading: false })
         })
 
         newSocket.on('user_joined', (user: User) => {
@@ -126,8 +116,12 @@ export const useRoomStore = create<RoomStore>()(
             (response: { success: boolean; data: SocketRoom }) => {
               clearTimeout(timeout)
               set({ isLoading: false })
-              set({ currentRoom: response.data })
-              resolve(response.success)
+              if (!response.success) {
+                console.error('Failed to create room')
+                return resolve(false)
+              }
+              set({ currentRoom: response.data, lastRoomId: response.data.id })
+              resolve(true)
             },
           )
 
@@ -159,13 +153,12 @@ export const useRoomStore = create<RoomStore>()(
               clearTimeout(timeout)
               set({ isLoading: false })
 
-              if (response.success && response.data) {
-                set({ currentRoom: response.data })
-                resolve(true)
-              } else {
+              if (!response.success || !response.data) {
                 console.error('Failed to join room:', response.error)
-                resolve(false)
+                return resolve(false)
               }
+              set({ currentRoom: response.data, lastRoomId: roomId })
+              resolve(true)
             },
           )
 
@@ -211,6 +204,7 @@ export const useRoomStore = create<RoomStore>()(
       partialize: state => ({
         userName: state.userName,
         currentRoom: state.currentRoom,
+        lastRoomId: state.currentRoom?.id,
       }),
     },
   ),
