@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useCallback, useState } from 'react'
+import { useRef, useCallback, useState, useEffect } from 'react'
 import { SubtitleTrack } from '@/types/movie'
 import VideoControls from '../video-controls'
 import VideoLoadingOverlay from './video-loading-overlay'
@@ -29,6 +29,7 @@ export default function VideoPlayer({
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const hideControlsTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const [roomPanelWidth, setRoomPanelWidth] = useState(0)
   const [isRoomPanelCollapsed, setIsRoomPanelCollapsed] = useState(true)
 
@@ -132,13 +133,39 @@ export default function VideoPlayer({
     disabled: isSeeking || needsRecovery || isPending,
   })
 
+  const clearHideControlsTimeout = useCallback(() => {
+    if (hideControlsTimeoutRef.current) {
+      clearTimeout(hideControlsTimeoutRef.current)
+      hideControlsTimeoutRef.current = null
+    }
+  }, [])
+
+  const startHideControlsTimer = useCallback(() => {
+    clearHideControlsTimeout()
+    hideControlsTimeoutRef.current = setTimeout(() => {
+      setShowControls(false)
+      hideControlsTimeoutRef.current = null
+    }, 3000)
+  }, [clearHideControlsTimeout, setShowControls])
+
+  const handleMouseActivity = useCallback(() => {
+    setShowControls(true)
+    startHideControlsTimer()
+  }, [setShowControls, startHideControlsTimer])
+
   const handleMouseEnter = useCallback(() => {
     setShowControls(true)
-  }, [setShowControls])
+    startHideControlsTimer()
+  }, [setShowControls, startHideControlsTimer])
 
   const handleMouseLeave = useCallback(() => {
+    clearHideControlsTimeout()
     setShowControls(false)
-  }, [setShowControls])
+  }, [clearHideControlsTimeout, setShowControls])
+
+  const handleMouseMove = useCallback(() => {
+    handleMouseActivity()
+  }, [handleMouseActivity])
 
   const handleRoomPanelChange = useCallback(
     (width: number, collapsed: boolean) => {
@@ -147,6 +174,12 @@ export default function VideoPlayer({
     },
     [],
   )
+
+  useEffect(() => {
+    return () => {
+      clearHideControlsTimeout()
+    }
+  }, [clearHideControlsTimeout])
 
   return (
     <div className="relative flex w-full h-screen bg-black">
@@ -166,9 +199,10 @@ export default function VideoPlayer({
           ref={containerRef}
           className={`relative h-full bg-black group ${
             isFullscreen ? 'w-screen h-screen' : 'w-full'
-          }`}
+          } ${!showControls ? 'cursor-none' : 'cursor-auto'}`}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
+          onMouseMove={handleMouseMove}
         >
           <VideoTitle title={title} showControls={showControls} />
 
