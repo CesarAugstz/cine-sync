@@ -45,8 +45,6 @@ export default function RoomPanel({ onWidthChange }: RoomPanelProps) {
     syncVideo,
   } = useRoomStore()
 
-  console.log('current room', currentRoom)
-
   const panelWidth = 350
 
   useEffect(() => {

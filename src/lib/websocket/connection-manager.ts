@@ -5,6 +5,10 @@ export class ConnectionManager {
   private connections = new Map<string, Socket>()
   private userSockets = new Map<string, string>()
 
+  getAllUserSockets(): Map<string, string> {
+    return this.userSockets
+  }
+
   addConnection(socket: Socket, userId: string): void {
     this.connections.set(socket.id, socket)
     this.userSockets.set(userId, socket.id)

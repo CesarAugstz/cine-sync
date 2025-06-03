@@ -4,22 +4,26 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Room } from '@/types/room'
+import { SocketRoom } from '@/lib/websocket/types'
 
 interface RoomCreatorProps {
-  onRoomCreated: (room: Room) => void
-  onCreateRoom: (roomName: string, userName: string) => Promise<Room>
+  onRoomCreated: (room: SocketRoom) => void
+  onCreateRoom: (roomName: string, userName: string) => Promise<SocketRoom>
   isLoading: boolean
 }
 
-export default function RoomCreator({ onRoomCreated, onCreateRoom, isLoading }: RoomCreatorProps) {
+export default function RoomCreator({
+  onRoomCreated,
+  onCreateRoom,
+  isLoading,
+}: RoomCreatorProps) {
   const [roomName, setRoomName] = useState('')
   const [userName, setUserName] = useState('')
   const [error, setError] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!roomName.trim() || !userName.trim()) {
       setError('Please fill in all fields')
       return
@@ -45,7 +49,7 @@ export default function RoomCreator({ onRoomCreated, onCreateRoom, isLoading }: 
             <Input
               placeholder="Room name"
               value={roomName}
-              onChange={(e) => setRoomName(e.target.value)}
+              onChange={e => setRoomName(e.target.value)}
               disabled={isLoading}
             />
           </div>
@@ -53,18 +57,12 @@ export default function RoomCreator({ onRoomCreated, onCreateRoom, isLoading }: 
             <Input
               placeholder="Your name"
               value={userName}
-              onChange={(e) => setUserName(e.target.value)}
+              onChange={e => setUserName(e.target.value)}
               disabled={isLoading}
             />
           </div>
-          {error && (
-            <div className="text-red-500 text-sm">{error}</div>
-          )}
-          <Button 
-            type="submit" 
-            className="w-full" 
-            disabled={isLoading}
-          >
+          {error && <div className="text-red-500 text-sm">{error}</div>}
+          <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? 'Creating...' : 'Create Room'}
           </Button>
         </form>

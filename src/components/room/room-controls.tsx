@@ -3,16 +3,20 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Copy, LogOut, Users } from 'lucide-react'
-import { Room } from '@/types/room'
 import UserList from './user-list'
+import { SocketRoom } from '@/lib/websocket/types'
 
 interface RoomControlsProps {
-  room: Room
+  room: SocketRoom
   onLeaveRoom: () => void
   onCopyRoomId: () => void
 }
 
-export default function RoomControls({ room, onLeaveRoom, onCopyRoomId }: RoomControlsProps) {
+export default function RoomControls({
+  room,
+  onLeaveRoom,
+  onCopyRoomId,
+}: RoomControlsProps) {
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
@@ -30,14 +34,10 @@ export default function RoomControls({ room, onLeaveRoom, onCopyRoomId }: RoomCo
             <Copy className="h-4 w-4" />
           </Button>
         </div>
-        
+
         <UserList users={room.users} />
-        
-        <Button 
-          variant="destructive" 
-          className="w-full" 
-          onClick={onLeaveRoom}
-        >
+
+        <Button variant="destructive" className="w-full" onClick={onLeaveRoom}>
           <LogOut className="h-4 w-4 mr-2" />
           Leave Room
         </Button>

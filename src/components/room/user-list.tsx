@@ -1,11 +1,10 @@
 'use client'
 
-import { User } from '@/types/room'
+import { SocketUser } from '@/lib/websocket/types'
 import { Crown, User as UserIcon } from 'lucide-react'
 
 interface UserListProps {
-  users: User[]
-}
+  users: SocketUser[] }
 
 export default function UserList({ users }: UserListProps) {
   if (!users.length) return null
@@ -14,7 +13,7 @@ export default function UserList({ users }: UserListProps) {
     <div className="bg-card/50 rounded-lg p-4">
       <h3 className="font-semibold mb-3 text-sm">Users ({users.length})</h3>
       <div className="space-y-2">
-        {users.map((user) => (
+        {users.map(user => (
           <div key={user.id} className="flex items-center space-x-2">
             {user.isHost ? (
               <Crown className="h-4 w-4 text-yellow-500" />

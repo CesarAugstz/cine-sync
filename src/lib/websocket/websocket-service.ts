@@ -9,7 +9,7 @@ import {
   JoinRoomPayload,
   LeaveRoomPayload,
   VideoControlPayload,
-  ReconnectPayload
+  ReconnectPayload,
 } from './types'
 
 export class WebSocketService {
@@ -23,16 +23,22 @@ export class WebSocketService {
     this.io = new SocketServer(httpServer, {
       cors: {
         origin: process.env.NODE_ENV === 'production' ? false : '*',
-        methods: ['GET', 'POST']
-      }
+        methods: ['GET', 'POST'],
+      },
     })
 
     console.log('WebSocket service initialized')
 
     this.roomManager = new RoomManager()
     this.connectionManager = new ConnectionManager()
-    this.roomEventHandler = new RoomEventHandler(this.roomManager, this.connectionManager)
-    this.videoEventHandler = new VideoEventHandler(this.roomManager, this.connectionManager)
+    this.roomEventHandler = new RoomEventHandler(
+      this.roomManager,
+      this.connectionManager,
+    )
+    this.videoEventHandler = new VideoEventHandler(
+      this.roomManager,
+      this.connectionManager,
+    )
 
     this.setupEventListeners()
   }
@@ -76,6 +82,10 @@ export class WebSocketService {
     })
 
     socket.on('reconnect_user', (payload: ReconnectPayload) => {
+      console.log('rooms', {
+        rooms: this.roomManager.getAllRooms(),
+        users: this.connectionManager.getAllUserSockets(),
+      })
       this.handleReconnect(socket, payload)
     })
 
@@ -92,7 +102,7 @@ export class WebSocketService {
     if (!payload.userName?.trim()) {
       socket.emit('reconnect_response', {
         success: false,
-        error: 'User name is required'
+        error: 'User name is required',
       })
       return
     }
@@ -100,16 +110,18 @@ export class WebSocketService {
     if (!payload.roomId?.trim()) {
       socket.emit('reconnect_response', {
         success: true,
-        data: null
+        data: null,
       })
       return
     }
+
+    console.log('rooms', this.roomManager.getAllRooms())
 
     const room = this.roomManager.getRoom(payload.roomId)
     if (!room) {
       socket.emit('reconnect_response', {
         success: false,
-        error: 'Room not found'
+        error: 'Room not found',
       })
       return
     }
@@ -118,7 +130,7 @@ export class WebSocketService {
     if (!existingUser) {
       socket.emit('reconnect_response', {
         success: false,
-        error: 'User not found in room'
+        error: 'User not found in room',
       })
       return
     }
@@ -128,18 +140,14 @@ export class WebSocketService {
 
     socket.emit('reconnect_response', {
       success: true,
-      data: room
+      data: room,
     })
 
-    this.connectionManager.broadcastToRoom(
-      room.users,
-      'user_reconnected',
-      {
-        type: 'user_reconnected',
-        user: existingUser,
-        room
-      },
-    )
+    this.connectionManager.broadcastToRoom(room.users, 'user_reconnected', {
+      type: 'user_reconnected',
+      user: existingUser,
+      room,
+    })
   }
 
   getStats(): {
@@ -150,7 +158,7 @@ export class WebSocketService {
     return {
       connectedUsers: this.roomManager.getUserCount(),
       activeRooms: this.roomManager.getRoomCount(),
-      totalConnections: this.connectionManager.getConnectionCount()
+      totalConnections: this.connectionManager.getConnectionCount(),
     }
   }
 

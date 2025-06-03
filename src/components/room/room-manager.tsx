@@ -6,26 +6,48 @@ import { Users, Plus, UserPlus } from 'lucide-react'
 import RoomCreator from './room-creator'
 import RoomJoiner from './room-joiner'
 import RoomControls from './room-controls'
-import { useRoomState } from '@/hooks/use-room-state'
-import { Room } from '@/types/room'
+import { useRoomStore } from '@/stores/room-store'
+import { SocketRoom } from '@/lib/websocket/types'
 
 type RoomView = 'menu' | 'create' | 'join'
 
 export default function RoomManager() {
   const [currentView, setCurrentView] = useState<RoomView>('menu')
   const {
-    roomState,
+    currentRoom,
     isLoading,
-    handleCreateRoom,
-    handleJoinRoom,
-    handleLeaveRoom,
-    handleCopyRoomId
-  } = useRoomState()
+    createRoom,
+    joinRoom,
+    leaveRoom,
+    copyRoomId,
+  } = useRoomStore()
 
-  if (roomState.currentRoom) {
+  const handleCreateRoom = async (
+    roomName: string,
+    userName: string,
+  ): Promise<SocketRoom> => {
+    return await createRoom(roomName, userName)
+  }
+
+  const handleJoinRoom = async (
+    roomId: string,
+    userName: string,
+  ): Promise<SocketRoom> => {
+    return await joinRoom(roomId, userName)
+  }
+
+  const handleLeaveRoom = () => {
+    leaveRoom()
+  }
+
+  const handleCopyRoomId = () => {
+    copyRoomId()
+  }
+
+  if (currentRoom) {
     return (
       <RoomControls
-        room={roomState.currentRoom as unknown as Room}
+        room={currentRoom}
         onLeaveRoom={handleLeaveRoom}
         onCopyRoomId={handleCopyRoomId}
       />
@@ -35,10 +57,7 @@ export default function RoomManager() {
   if (currentView === 'create') {
     return (
       <div className="space-y-4">
-        <Button 
-          variant="outline" 
-          onClick={() => setCurrentView('menu')}
-        >
+        <Button variant="outline" onClick={() => setCurrentView('menu')}>
           Back
         </Button>
         <RoomCreator
@@ -53,10 +72,7 @@ export default function RoomManager() {
   if (currentView === 'join') {
     return (
       <div className="space-y-4">
-        <Button 
-          variant="outline" 
-          onClick={() => setCurrentView('menu')}
-        >
+        <Button variant="outline" onClick={() => setCurrentView('menu')}>
           Back
         </Button>
         <RoomJoiner
@@ -74,19 +90,19 @@ export default function RoomManager() {
         <Users className="h-5 w-5" />
         <h3 className="font-semibold">Watch Together</h3>
       </div>
-      
+
       <div className="space-y-3">
-        <Button 
-          className="w-full justify-start" 
+        <Button
+          className="w-full justify-start"
           variant="outline"
           onClick={() => setCurrentView('create')}
         >
           <Plus className="h-4 w-4 mr-2" />
           Create Room
         </Button>
-        
-        <Button 
-          className="w-full justify-start" 
+
+        <Button
+          className="w-full justify-start"
           variant="outline"
           onClick={() => setCurrentView('join')}
         >

@@ -1,18 +1,7 @@
-export interface User {
-  id: string
-  name: string
-  isHost: boolean
-}
-
-export interface Room {
-  id: string
-  name: string
-  users: User[]
-  createdAt: string
-}
+import { SocketRoom, SocketUser } from '@/lib/websocket/types'
 
 export interface RoomState {
-  currentRoom: Room | null
+  currentRoom: SocketRoom | null
   isConnected: boolean
-  currentUser: User | null
+  currentUser: SocketUser | null
 }

@@ -3,6 +3,7 @@ export interface SocketUser {
   name: string
   socketId: string
   joinedAt: number
+  isHost?: boolean
 }
 
 export interface VideoState {

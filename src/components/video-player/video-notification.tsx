@@ -54,11 +54,6 @@ export default function VideoNotification({
           exit={{ opacity: 0, y: -50, scale: 0.9 }}
           transition={{ duration: 0.3, ease: 'easeOut' }}
           className="absolute top-20 left-1/2 transform -translate-x-1/2 z-30"
-          onAnimationComplete={(definition) => {
-            if (definition.opacity === 0) {
-              setIsVisible(false)
-            }
-          }}
         >
           <div
             className={`flex items-center space-x-2 px-4 py-2 rounded-lg border backdrop-blur-sm ${getStyles()}`}

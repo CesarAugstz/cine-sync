@@ -4,22 +4,26 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Room } from '@/types/room'
+import { SocketRoom } from '@/lib/websocket/types'
 
 interface RoomJoinerProps {
-  onRoomJoined: (room: Room) => void
-  onJoinRoom: (roomId: string, userName: string) => Promise<Room>
+  onRoomJoined: (room: SocketRoom) => void
+  onJoinRoom: (roomId: string, userName: string) => Promise<SocketRoom>
   isLoading: boolean
 }
 
-export default function RoomJoiner({ onRoomJoined, onJoinRoom, isLoading }: RoomJoinerProps) {
+export default function RoomJoiner({
+  onRoomJoined,
+  onJoinRoom,
+  isLoading,
+}: RoomJoinerProps) {
   const [roomId, setRoomId] = useState('')
   const [userName, setUserName] = useState('')
   const [error, setError] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!roomId.trim() || !userName.trim()) {
       setError('Please fill in all fields')
       return
@@ -27,7 +31,10 @@ export default function RoomJoiner({ onRoomJoined, onJoinRoom, isLoading }: Room
 
     try {
       setError('')
-      const room = await onJoinRoom(roomId.trim().toUpperCase(), userName.trim())
+      const room = await onJoinRoom(
+        roomId.trim().toUpperCase(),
+        userName.trim(),
+      )
       onRoomJoined(room)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to join room')
@@ -45,7 +52,7 @@ export default function RoomJoiner({ onRoomJoined, onJoinRoom, isLoading }: Room
             <Input
               placeholder="Room ID"
               value={roomId}
-              onChange={(e) => setRoomId(e.target.value.toUpperCase())}
+              onChange={e => setRoomId(e.target.value.toUpperCase())}
               disabled={isLoading}
               maxLength={6}
             />
@@ -54,18 +61,12 @@ export default function RoomJoiner({ onRoomJoined, onJoinRoom, isLoading }: Room
             <Input
               placeholder="Your name"
               value={userName}
-              onChange={(e) => setUserName(e.target.value)}
+              onChange={e => setUserName(e.target.value)}
               disabled={isLoading}
             />
           </div>
-          {error && (
-            <div className="text-red-500 text-sm">{error}</div>
-          )}
-          <Button 
-            type="submit" 
-            className="w-full" 
-            disabled={isLoading}
-          >
+          {error && <div className="text-red-500 text-sm">{error}</div>}
+          <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? 'Joining...' : 'Join Room'}
           </Button>
         </form>

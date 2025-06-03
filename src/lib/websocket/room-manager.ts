@@ -27,6 +27,8 @@ export class RoomManager {
 
     this.rooms.set(roomId, room)
     this.userToRoom.set(hostUser.id, roomId)
+
+    console.log('Created room', { room, rooms: this.rooms })
     
     return room
   }
