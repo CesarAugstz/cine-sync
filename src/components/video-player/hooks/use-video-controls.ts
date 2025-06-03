@@ -2,6 +2,7 @@
 
 import { useCallback, useRef } from 'react'
 import { useWebSocketVideo } from '@/hooks/use-websocket-video'
+import { VideoState } from '@/lib/websocket/types'
 
 interface UseVideoControlsProps {
   videoRef: React.RefObject<HTMLVideoElement | null>
@@ -37,65 +38,106 @@ export function useVideoControls({
   performSeek,
   showNotification,
 }: UseVideoControlsProps) {
-  const { isInRoom, emitPlay, emitPause, emitSeek, requestSync } = useWebSocketVideo()
+  const { isInRoom, emitPlay, emitPause, emitSeek, requestSync } =
+    useWebSocketVideo()
 
   const pendingActionRef = useRef<string | null>(null)
 
-  const executePlay = useCallback(() => {
-    const video = videoRef.current
-    if (!video) return
-    
-    video.play().catch(console.error)
-    setIsPlaying(true)
-    pendingActionRef.current = null
-  }, [videoRef, setIsPlaying])
+  const executeSeek = useCallback(
+    (targetTime: number) => {
+      const video = videoRef.current
+      if (!video) return
 
-  const executePause = useCallback(() => {
-    const video = videoRef.current
-    if (!video) return
-    
-    video.pause()
-    setIsPlaying(false)
-    pendingActionRef.current = null
-  }, [videoRef, setIsPlaying])
+      performSeek(video, targetTime)
+      pendingActionRef.current = null
+    },
+    [videoRef, performSeek],
+  )
 
-  const executeSeek = useCallback((targetTime: number) => {
-    const video = videoRef.current
-    if (!video) return
-    
-    performSeek(video, targetTime)
-    pendingActionRef.current = null
-  }, [videoRef, performSeek])
+  const executeSync = useCallback(
+    (currentTime: number, isPlaying: boolean) => {
+      const video = videoRef.current
+      if (!video) return
 
-  const executeSync = useCallback((currentTime: number, isPlaying: boolean) => {
-    const video = videoRef.current
-    if (!video) return
-    
-    performSeek(video, currentTime)
-    if (isPlaying && video.paused) {
-      video.play().catch(console.error)
-      setIsPlaying(true)
-    } else if (!isPlaying && !video.paused) {
+      performSeek(video, currentTime)
+      if (isPlaying && video.paused) {
+        video.play().catch(console.error)
+        setIsPlaying(true)
+      } else if (!isPlaying && !video.paused) {
+        video.pause()
+        setIsPlaying(false)
+      }
+      pendingActionRef.current = null
+      showNotification('Synced with room')
+    },
+    [videoRef, performSeek, setIsPlaying, showNotification],
+  )
+
+  const executeSyncWhenOutOfSync = useCallback(
+    (videoState: VideoState) => {
+      const video = videoRef.current
+      if (!video) return
+
+      const currentTime = video.currentTime
+      const currentTimeRoom = videoState.currentTime ?? 0
+      const diff = Math.abs(currentTime - currentTimeRoom)
+      if (diff > 2) {
+        showNotification('Out of sync, syncing with room...', 'info')
+        executeSync(currentTimeRoom, videoState.isPlaying ?? false)
+      }
+    },
+    [videoRef, showNotification, executeSync],
+  )
+
+  const executePause = useCallback(
+    (videoState?: VideoState) => {
+      const video = videoRef.current
+      if (!video) return
+
+      if (videoState) executeSyncWhenOutOfSync(videoState)
+
       video.pause()
       setIsPlaying(false)
-    }
-    pendingActionRef.current = null
-    showNotification('Synced with room')
-  }, [videoRef, performSeek, setIsPlaying, showNotification])
+      pendingActionRef.current = null
+    },
+    [videoRef, executeSyncWhenOutOfSync, setIsPlaying],
+  )
 
-  const togglePlay = useCallback(() => {
+  const executePlay = useCallback(
+    (videoState?: VideoState) => {
+      const video = videoRef.current
+      if (!video) return
+
+      if (videoState) executeSyncWhenOutOfSync(videoState)
+
+      video.play().catch(console.error)
+      setIsPlaying(true)
+      pendingActionRef.current = null
+    },
+    [videoRef, executeSyncWhenOutOfSync, setIsPlaying],
+  )
+
+  const togglePlay = useCallback(async () => {
     const video = videoRef.current
     if (!video || isSeeking || needsRecovery || pendingActionRef.current) return
 
     if (isInRoom) {
-      if (isPlaying) {
-        pendingActionRef.current = 'pause'
-        showNotification('Requesting pause...', 'info')
-        emitPause({ currentTime: video.currentTime })
-      } else {
-        pendingActionRef.current = 'play'
-        showNotification('Requesting play...', 'info')
-        emitPlay(video.currentTime)
+      try {
+        if (isPlaying) {
+          pendingActionRef.current = 'pause'
+          showNotification('Requesting pause...', 'info')
+          await emitPause({ currentTime: video.currentTime })
+          showNotification('Pause confirmed', 'success')
+        } else {
+          pendingActionRef.current = 'play'
+          showNotification('Requesting play...', 'info')
+          await emitPlay(video.currentTime)
+          showNotification('Play confirmed', 'success')
+        }
+      } catch (error) {
+        console.error(error)
+        pendingActionRef.current = null
+        showNotification('Request failed', 'error')
       }
       return
     }
@@ -118,16 +160,23 @@ export function useVideoControls({
     emitPause,
   ])
 
-  const skipForward = useCallback(() => {
+  const skipForward = useCallback(async () => {
     const video = videoRef.current
     if (!video || isSeeking || needsRecovery || pendingActionRef.current) return
 
     const newTime = Math.min(video.currentTime + 15, duration)
 
     if (isInRoom) {
-      pendingActionRef.current = 'seek'
-      showNotification('Requesting skip forward...', 'info')
-      emitSeek(video.currentTime, newTime)
+      try {
+        pendingActionRef.current = 'seek'
+        showNotification('Requesting skip forward...', 'info')
+        await emitSeek(video.currentTime, newTime, isPlaying)
+        showNotification('Skip forward confirmed', 'success')
+      } catch (error) {
+        console.error(error)
+        pendingActionRef.current = null
+        showNotification('Request failed', 'error')
+      }
       return
     }
 
@@ -142,18 +191,26 @@ export function useVideoControls({
     executeSeek,
     showNotification,
     emitSeek,
+    isPlaying,
   ])
 
-  const skipBackward = useCallback(() => {
+  const skipBackward = useCallback(async () => {
     const video = videoRef.current
     if (!video || isSeeking || needsRecovery || pendingActionRef.current) return
 
     const newTime = Math.max(video.currentTime - 15, 0)
 
     if (isInRoom) {
-      pendingActionRef.current = 'seek'
-      showNotification('Requesting skip backward...', 'info')
-      emitSeek(video.currentTime, newTime)
+      try {
+        pendingActionRef.current = 'seek'
+        showNotification('Requesting skip backward...', 'info')
+        await emitSeek(video.currentTime, newTime, isPlaying)
+        showNotification('Skip backward confirmed', 'success')
+      } catch (error) {
+        console.error('skipBackward', error)
+        pendingActionRef.current = null
+        showNotification('Request failed', 'error')
+      }
       return
     }
 
@@ -167,19 +224,34 @@ export function useVideoControls({
     executeSeek,
     showNotification,
     emitSeek,
+    isPlaying,
   ])
 
   const handleSeek = useCallback(
-    (value: number[]) => {
+    async (value: number[]) => {
       const video = videoRef.current
-      if (!video || isSeeking || needsRecovery || !duration || pendingActionRef.current) return
+      if (
+        !video ||
+        isSeeking ||
+        needsRecovery ||
+        !duration ||
+        pendingActionRef.current
+      )
+        return
 
       const newTime = (value[0] / 100) * duration
 
       if (isInRoom) {
-        pendingActionRef.current = 'seek'
-        showNotification('Requesting seek...', 'info')
-        emitSeek(video.currentTime, newTime)
+        try {
+          pendingActionRef.current = 'seek'
+          showNotification('Requesting seek...', 'info')
+          await emitSeek(video.currentTime, newTime, isPlaying)
+          showNotification('Seek confirmed', 'success')
+        } catch (error) {
+          console.error('handleSeek', error)
+          pendingActionRef.current = null
+          showNotification('Request failed', 'error')
+        }
         return
       }
 
@@ -187,13 +259,14 @@ export function useVideoControls({
     },
     [
       videoRef,
-      duration,
       isSeeking,
       needsRecovery,
-      executeSeek,
+      duration,
       isInRoom,
-      emitSeek,
+      executeSeek,
       showNotification,
+      emitSeek,
+      isPlaying,
     ],
   )
 

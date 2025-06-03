@@ -4,13 +4,15 @@ export interface SocketUser {
   socketId: string
   joinedAt: number
   isHost?: boolean
+  isReady?: boolean
 }
 
 export interface VideoState {
-  currentTime: number
-  isPlaying: boolean
-  timestamp: number
-  lastUpdatedBy: string
+  currentTime?: number
+  isPlaying?: boolean
+  waitingToPlay?: boolean
+  timestamp?: number
+  lastUpdatedBy?: string
 }
 
 export interface SocketRoom {
@@ -41,11 +43,17 @@ export interface VideoControlPayload {
   timestamp: number
   currentTime: number
   targetTime?: number
+  isPlaying?: boolean
 }
 
 export interface ReconnectPayload {
   roomId?: string
-  userName: string
+  user: SocketUser
+}
+
+export interface AuthenticateUserPayload {
+  userId?: string
+  userName?: string
 }
 
 export interface SocketResponse<T = any> {

@@ -6,16 +6,21 @@ interface VideoLoadingOverlayProps {
   isLoading: boolean
   isSeeking: boolean
   needsRecovery: boolean
+  isAwaitingUsers: boolean
 }
 
 export default function VideoLoadingOverlay({
   isLoading,
   isSeeking,
   needsRecovery,
+  isAwaitingUsers,
 }: VideoLoadingOverlayProps) {
-  if (!isLoading && !isSeeking && !needsRecovery) return null
+  if (!isLoading && !isSeeking && !needsRecovery && !isAwaitingUsers)
+    return null
 
-  let message = 'Loading...'
+  let message = ''
+  if (isAwaitingUsers) message = 'Waiting for users...'
+  if (isLoading) message = 'Loading...'
   if (isSeeking) message = 'Seeking...'
   if (needsRecovery) message = 'Recovering video...'
 

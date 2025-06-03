@@ -7,7 +7,9 @@ export function useWebSocketVideo() {
   const {
     currentRoom,
     isConnected,
-    emitVideoControl,
+    emitVideoPlay,
+    emitVideoPause,
+    emitVideoSeek,
     syncVideo,
   } = useRoomStore()
 
@@ -15,39 +17,26 @@ export function useWebSocketVideo() {
 
   const emitPlay = useCallback(
     (currentTime: number) => {
-      if (!isInRoom) return
-      emitVideoControl('video_play', {
-        roomId: currentRoom!.id,
-        currentTime,
-        timestamp: Date.now(),
-      })
+      if (!isInRoom) return Promise.reject('Not in room')
+      return emitVideoPlay(currentTime)
     },
-    [isInRoom, emitVideoControl, currentRoom],
+    [isInRoom, emitVideoPlay],
   )
 
   const emitPause = useCallback(
     ({ currentTime }: { currentTime: number }) => {
-      if (!isInRoom) return
-      emitVideoControl('video_pause', {
-        roomId: currentRoom!.id,
-        currentTime,
-        timestamp: Date.now(),
-      })
+      if (!isInRoom) return Promise.reject('Not in room')
+      return emitVideoPause(currentTime)
     },
-    [isInRoom, emitVideoControl, currentRoom],
+    [isInRoom, emitVideoPause],
   )
 
   const emitSeek = useCallback(
-    (fromTime: number, targetTime: number) => {
-      if (!isInRoom) return
-      emitVideoControl('video_seek', {
-        roomId: currentRoom!.id,
-        currentTime: fromTime,
-        targetTime,
-        timestamp: Date.now(),
-      })
+    (fromTime: number, targetTime: number, isPlaying: boolean) => {
+      if (!isInRoom) return Promise.reject('Not in room')
+      return emitVideoSeek(fromTime, targetTime, isPlaying)
     },
-    [isInRoom, emitVideoControl, currentRoom],
+    [isInRoom, emitVideoSeek],
   )
 
   const requestSync = useCallback(() => {

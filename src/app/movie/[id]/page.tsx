@@ -90,7 +90,7 @@ export default function MoviePage() {
         }}
       >
         <div className="p-4">
-          <Link href="/" className="inline-flex items-center text-white hover:text-gray-300 mb-4">
+          <Link href="/" className="inline-flex items-center text-white hover:text-gray-300">
             <ArrowLeft size={20} className="mr-2" />
             Back to Movies
           </Link>

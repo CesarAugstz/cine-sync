@@ -2,10 +2,11 @@
 
 import { useEffect } from 'react'
 import { useRoomStore } from '@/stores/room-store'
+import { VideoState } from '@/lib/websocket/types'
 
-interface VideoExecutionFunctions {
-  executePlay: () => void
-  executePause: () => void
+export interface VideoExecutionFunctions {
+  executePlay: (videoState: VideoState) => void
+  executePause: (videoState: VideoState) => void
   executeSeek: (targetTime: number) => void
   executeSync: (currentTime: number, isPlaying: boolean) => void
 }
@@ -27,7 +28,7 @@ export function useVideoWebSocketHandlers({
     })
 
     return () => {
-      setVideoExecutionFunctions({})
+      setVideoExecutionFunctions(undefined)
     }
   }, [executePlay, executePause, executeSeek, executeSync, setVideoExecutionFunctions])
 }

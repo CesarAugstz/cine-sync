@@ -4,7 +4,6 @@ import { useRef, useCallback, useState, useEffect } from 'react'
 import { SubtitleTrack } from '@/types/movie'
 import VideoControls from '../video-controls'
 import VideoLoadingOverlay from './video-loading-overlay'
-import VideoNotification from './video-notification'
 import VideoTitle from './video-title'
 import RoomPanel from '../room/room-panel'
 import { useVideoState } from './hooks/use-video-state'
@@ -15,6 +14,7 @@ import { useVideoEvents } from './hooks/use-video-events'
 import { useVideoControls } from './hooks/use-video-controls'
 import { useVideoKeyboard } from './hooks/use-video-keyboard'
 import { useVideoWebSocketHandlers } from '@/hooks/use-video-websocket-handlers'
+import { useRoomStore } from '@/stores/room-store'
 
 interface VideoPlayerProps {
   src: string
@@ -32,6 +32,7 @@ export default function VideoPlayer({
   const hideControlsTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const [roomPanelWidth, setRoomPanelWidth] = useState(0)
   const [isRoomPanelCollapsed, setIsRoomPanelCollapsed] = useState(true)
+  const isAwaitingUsers = useRoomStore(state => state.isAwaitingUsers)
 
   const {
     isPlaying,
@@ -59,7 +60,7 @@ export default function VideoPlayer({
     formattedDuration,
   } = useVideoState()
 
-  const { notification, showNotification } = useVideoNotifications()
+  const { showNotification } = useVideoNotifications()
 
   const { performSeek, handleVideoSeeked } = useVideoSeek({
     setIsSeeking,
@@ -182,7 +183,7 @@ export default function VideoPlayer({
   }, [clearHideControlsTimeout])
 
   return (
-    <div className="relative flex w-full h-screen bg-black">
+    <div className="relative max-h-[85vh] flex w-full h-screen bg-black">
       <div
         className={`flex-1 transition-all duration-300 ${
           isFullscreen ? 'w-screen h-screen' : ''
@@ -212,7 +213,7 @@ export default function VideoPlayer({
               isFullscreen ? 'object-contain' : 'object-contain'
             }`}
             poster=""
-            preload="metadata"
+            preload="auto"
             onClick={togglePlay}
             onDoubleClick={toggleFullscreen}
             crossOrigin="anonymous"
@@ -234,13 +235,8 @@ export default function VideoPlayer({
           <VideoLoadingOverlay
             isLoading={isLoading}
             isSeeking={isSeeking}
+            isAwaitingUsers={isAwaitingUsers}
             needsRecovery={needsRecovery}
-          />
-
-          <VideoNotification
-            show={notification.show}
-            message={notification.message}
-            type={notification.type}
           />
 
           {showControls && (

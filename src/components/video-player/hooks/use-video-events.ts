@@ -1,3 +1,4 @@
+import { useRoomStore } from '@/stores/room-store'
 import { useEffect, useCallback } from 'react'
 
 interface UseVideoEventsProps {
@@ -23,17 +24,25 @@ export function useVideoEvents({
   isSeeking,
   needsRecovery,
 }: UseVideoEventsProps) {
+  const emitVideoCanPlay = useRoomStore(state => state.emitVideoCanPlay)
+  const emitVideoWaiting = useRoomStore(state => state.emitVideoWaiting)
+
   const handleVideoError = useCallback(() => {
     setIsLoading(false)
   }, [setIsLoading])
 
   const handleVideoWaiting = useCallback(() => {
     setIsLoading(true)
-  }, [setIsLoading])
+    emitVideoWaiting(
+      videoRef?.current?.currentTime ?? 0,
+      !(videoRef?.current?.paused ?? false),
+    )
+  }, [emitVideoWaiting, setIsLoading, videoRef])
 
   const handleVideoCanPlay = useCallback(() => {
     setIsLoading(false)
-  }, [setIsLoading])
+    emitVideoCanPlay(!(videoRef?.current?.paused ?? false))
+  }, [emitVideoCanPlay, setIsLoading, videoRef])
 
   const handleVideoLoadStart = useCallback(() => {
     setIsLoading(true)

@@ -1,47 +1,49 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import io, { Socket } from 'socket.io-client'
-import { SocketRoom, SocketUser } from '@/lib/websocket/types'
-
-interface VideoState {
-  currentTime: number
-  duration: number
-  isPlaying: boolean
-  volume: number
-}
+import { SocketRoom, SocketUser, VideoState } from '@/lib/websocket/types'
+import { VideoExecutionFunctions } from '@/hooks/use-video-websocket-handlers'
+import { toast } from 'sonner'
 
 interface RoomStore {
   socket: Socket | null
-  currentRoom: SocketRoom | null
-  lastRoomId: string | null
   isConnected: boolean
   isLoading: boolean
-  userName: string
-  videoState: VideoState | null
-  lastVideoAction: string | null
-  videoExecutionFunctions: {
-    executePlay?: () => void
-    executePause?: () => void
-    executeSeek?: (targetTime: number) => void
-    executeSync?: (currentTime: number, isPlaying: boolean) => void
-  }
   isConnecting: boolean
+  isAwaitingUsers: boolean
 
-  setUserName: (name: string) => void
+  currentUser: SocketUser | null
+  updateUserName: (userName: string) => Promise<SocketUser>
+
+  authenticateUser: (userId?: string, userName?: string) => Promise<SocketUser>
   connectSocket: () => void
   disconnectSocket: () => void
+
   createRoom: (roomName: string, userName: string) => Promise<SocketRoom>
   joinRoom: (roomId: string, userName: string) => Promise<SocketRoom>
   leaveRoom: () => void
-  emitVideoControl: (event: string, data: any) => void
-  syncVideo: () => void
   copyRoomId: () => void
-  setVideoExecutionFunctions: (functions: {
-    executePlay?: () => void
-    executePause?: () => void
-    executeSeek?: (targetTime: number) => void
-    executeSync?: (currentTime: number, isPlaying: boolean) => void
-  }) => void
+  currentRoom: SocketRoom | null
+  lastRoomId: string | null
+  availableRooms: SocketRoom[]
+  isLoadingRooms: boolean
+  getAvailableRooms: () => Promise<SocketRoom[]>
+
+  videoState: VideoState | null
+  lastVideoAction: string | null
+  videoExecutionFunctions: VideoExecutionFunctions | undefined
+  emitVideoPlay: (currentTime: number) => Promise<VideoState>
+  emitVideoPause: (currentTime: number) => Promise<VideoState>
+  emitVideoSeek: (
+    currentTime: number,
+    targetTime: number,
+    isPlaying: boolean,
+  ) => Promise<VideoState>
+  emitVideoSeeked: (currentTime: number) => void
+  emitVideoCanPlay: (isPlaying: boolean) => void
+  emitVideoWaiting: (currentTime: number, isPlaying: boolean) => void
+  syncVideo: () => void
+  setVideoExecutionFunctions: (functions?: VideoExecutionFunctions) => void
   updateVideoState: (state: Partial<VideoState>) => void
 }
 
@@ -49,17 +51,20 @@ export const useRoomStore = create<RoomStore>()(
   persist(
     (set, get) => ({
       socket: null,
+      isAwaitingUsers: false,
+      currentUser: null,
+
       currentRoom: null,
+      lastRoomId: null,
+      availableRooms: [],
+      isLoadingRooms: false,
+
       isConnected: false,
       isLoading: false,
-      userName: '',
-      lastRoomId: null,
       videoState: null,
       lastVideoAction: null,
-      videoExecutionFunctions: {},
+      videoExecutionFunctions: undefined,
       isConnecting: false,
-
-      setUserName: userName => set({ userName }),
 
       updateVideoState: (state: Partial<VideoState>) => {
         set(prev => ({
@@ -69,6 +74,33 @@ export const useRoomStore = create<RoomStore>()(
 
       setVideoExecutionFunctions: functions => {
         set({ videoExecutionFunctions: functions })
+      },
+
+      authenticateUser: async (userId?: string, userName?: string) => {
+        const { socket } = get()
+        if (!socket) throw new Error('Not connected to socket')
+
+        socket.emit('authenticate_user', { userId, userName })
+        const { data } = await waitForSocketResponse<{ data: SocketUser }>({
+          socket,
+          event: 'authenticate_user_response',
+          timeout: 5000,
+        })
+
+        set({ currentUser: data })
+        return data
+      },
+
+      updateUserName: async (userName: string) => {
+        const { currentUser } = get()
+        if (!currentUser) throw new Error('User not authenticated')
+
+        const updatedUser = await get().authenticateUser(
+          currentUser.id,
+          userName,
+        )
+        set({ currentUser: updatedUser })
+        return updatedUser
       },
 
       connectSocket: async () => {
@@ -95,38 +127,53 @@ export const useRoomStore = create<RoomStore>()(
 
             newSocket.on('connect', async () => {
               console.log('Connected to socket')
-              set({ isConnected: true })
+              set({ isConnected: true, socket: newSocket })
 
-              const { lastRoomId } = get()
-              console.log('Last room id', lastRoomId)
-              if (!lastRoomId) return
+              const { currentUser, lastRoomId } = get()
 
-              newSocket.emit('reconnect_user', {
-                roomId: lastRoomId,
-                userName: get().userName,
-              })
-              await new Promise(resolve => {
-                setTimeout(resolve, 3000)
-                newSocket.once(
-                  'reconnect_response',
-                  (response: {
-                    success: boolean
-                    data?: SocketRoom
-                    error?: string
-                  }) => {
-                    console.log('Reconnect response', response)
-                    if (!response.success || !response.data) {
-                      console.error(
-                        'Failed to reconnect to room:',
-                        response.error,
-                      )
-                      return
-                    }
-                    set({ currentRoom: response.data })
-                    resolve(true)
-                  },
+              try {
+                const user = await get().authenticateUser(
+                  currentUser?.id,
+                  currentUser?.name,
                 )
-              })
+                console.log('User authenticated:', user)
+
+                if (lastRoomId) {
+                  newSocket.emit('reconnect_user', {
+                    roomId: lastRoomId,
+                    user: user,
+                  })
+
+                  await new Promise((resolve, reject) => {
+                    setTimeout(
+                      () => reject(new Error('Reconnection timeout')),
+                      3000,
+                    )
+                    newSocket.once(
+                      'reconnect_response',
+                      (response: {
+                        success: boolean
+                        data?: SocketRoom
+                        error?: string
+                      }) => {
+                        console.log('Reconnect response', response)
+                        if (!response.success || !response.data) {
+                          console.error(
+                            'Failed to reconnect to room:',
+                            response.error,
+                          )
+                          reject(new Error(response.error))
+                          return
+                        }
+                        set({ currentRoom: response.data })
+                        resolve(true)
+                      },
+                    )
+                  })
+                }
+              } catch (error) {
+                console.error('Authentication failed:', error)
+              }
             })
 
             newSocket.on('disconnect', () => {
@@ -135,66 +182,81 @@ export const useRoomStore = create<RoomStore>()(
                 isConnected: get().isConnected,
                 isConnecting: get().isConnecting,
                 lastRoomId: get().lastRoomId,
-              },
-            )
-              set({ isConnected: false })
-              set({ isConnecting: false })
-              set({ currentRoom: null })
+              })
+              set({
+                isConnected: false,
+                isConnecting: false,
+                currentRoom: null,
+              })
             })
 
             newSocket.on(
               'user_joined',
               (data: { user: SocketUser; room: SocketRoom }) => {
+                console.log('user_joined', data)
+                toast.success(`The user ${data.user?.name} joined the room`)
                 set({ currentRoom: data.room })
               },
             )
 
-            newSocket.on('user_left', (data: { room: SocketRoom }) => {
-              console.log('User left', data)
-              set({ currentRoom: data.room })
-            })
+            newSocket.on(
+              'user_left',
+              (data: { room: SocketRoom; user: SocketUser }) => {
+                console.log('User left', data)
+                toast.warning(`The user ${data.user?.name} left the room`)
+                set({ currentRoom: data.room })
+              },
+            )
 
             newSocket.on('host_changed', (data: { room: SocketRoom }) => {
               console.log('Host changed', data)
               set({ currentRoom: data.room })
             })
 
-            newSocket.on('user_disconnected', (data: { room: SocketRoom }) => {
-              console.log('User disconnected', data)
-              set({ currentRoom: data.room })
+            newSocket.on(
+              'user_reconnected',
+              (data: { room: SocketRoom; user: SocketUser }) => {
+                console.log('User reconnected', data)
+                toast.success(`The user ${data.user?.name} reconnected`)
+                set({ currentRoom: data.room })
+              },
+            )
+
+            newSocket.on(
+              'user_disconnected',
+              (data: { room: SocketRoom; user: SocketUser }) => {
+                console.log('User disconnected', data)
+                toast.warning(`The user ${data.user?.name} disconnected`)
+                set({ currentRoom: data.room })
+              },
+            )
+
+            newSocket.on('awaiting_users', async () => {
+              console.log('Awaiting users')
+              set({ isAwaitingUsers: true })
+
+              await waitForSocketResponse({
+                socket: newSocket,
+                event: 'users_ready',
+                timeout: 30_000,
+              }).finally(() => {
+                set({ isAwaitingUsers: false })
+              })
             })
 
-            newSocket.on(
-              'video_play',
-              (data: {
-                currentTime: number
-                timestamp: number
-                userId: string
-              }) => {
-                const { videoExecutionFunctions } = get()
-                console.log('Received video play event', data)
-                set({ lastVideoAction: 'play' })
-                if (videoExecutionFunctions.executePlay) {
-                  videoExecutionFunctions.executePlay()
-                }
-              },
-            )
+            newSocket.on('video_play', (data: VideoState) => {
+              const { videoExecutionFunctions } = get()
+              console.log('Received video play event', data)
+              set({ lastVideoAction: 'play' })
+              videoExecutionFunctions?.executePlay?.(data)
+            })
 
-            newSocket.on(
-              'video_pause',
-              (data: {
-                currentTime: number
-                timestamp: number
-                userId: string
-              }) => {
-                const { videoExecutionFunctions } = get()
-                console.log('Received video pause event', data)
-                set({ lastVideoAction: 'pause' })
-                if (videoExecutionFunctions.executePause) {
-                  videoExecutionFunctions.executePause()
-                }
-              },
-            )
+            newSocket.on('video_pause', (data: VideoState) => {
+              const { videoExecutionFunctions } = get()
+              console.log('Received video pause event', data)
+              set({ lastVideoAction: 'pause' })
+              videoExecutionFunctions?.executePause(data)
+            })
 
             newSocket.on(
               'video_seek',
@@ -207,14 +269,12 @@ export const useRoomStore = create<RoomStore>()(
                 const { videoExecutionFunctions } = get()
                 console.log('Received video seek event', data)
                 set({ lastVideoAction: 'seek' })
-                if (videoExecutionFunctions.executeSeek) {
-                  videoExecutionFunctions.executeSeek(data.targetTime)
-                }
+                videoExecutionFunctions?.executeSeek(data.targetTime)
               },
             )
 
             newSocket.on(
-              'video_sync_response',
+              'video_sync',
               (data: {
                 currentTime: number
                 isPlaying: boolean
@@ -224,12 +284,10 @@ export const useRoomStore = create<RoomStore>()(
                 const { videoExecutionFunctions } = get()
                 console.log('Received video sync response', data)
                 set({ lastVideoAction: 'sync' })
-                if (videoExecutionFunctions.executeSync) {
-                  videoExecutionFunctions.executeSync(
-                    data.currentTime,
-                    data.isPlaying,
-                  )
-                }
+                videoExecutionFunctions?.executeSync(
+                  data.currentTime ?? 0,
+                  data.isPlaying,
+                )
               },
             )
 
@@ -237,8 +295,6 @@ export const useRoomStore = create<RoomStore>()(
               console.error('Socket error:', error)
               set({ isLoading: false })
             })
-
-            set({ socket: newSocket })
           }
           await connect()
         } catch (err) {
@@ -259,54 +315,61 @@ export const useRoomStore = create<RoomStore>()(
 
       createRoom: async (roomName, userName) => {
         console.log('Creating room', roomName, userName)
-        const { socket } = get()
+        const { socket, currentUser } = get()
         if (!socket) throw new Error('Not connected to socket')
+        if (!currentUser) throw new Error('User not authenticated')
 
         set({ isLoading: true })
 
-        return new Promise(resolve => {
+        return new Promise((resolve, reject) => {
           socket.emit('create_room', { roomName, userName })
 
           const timeout = setTimeout(() => {
             set({ isLoading: false })
-            throw new Error('Failed to create room')
+            reject(new Error('Failed to create room'))
           }, 5000)
 
           socket.once(
             'create_room_response',
-            (response: { success: boolean; data: SocketRoom }) => {
+            (response: {
+              success: boolean
+              data: SocketRoom
+              error?: string
+            }) => {
               clearTimeout(timeout)
               set({ isLoading: false })
               if (!response.success) {
-                console.error('Failed to create room')
-                throw new Error('Failed to create room')
+                console.error('Failed to create room:', response.error)
+                reject(new Error(response.error || 'Failed to create room'))
+                return
               }
               set({ currentRoom: response.data, lastRoomId: response.data.id })
               resolve(response.data)
             },
           )
 
-          socket.once('error', () => {
+          socket.once('error', error => {
             clearTimeout(timeout)
             set({ isLoading: false })
-            throw new Error('Failed to create room')
+            reject(new Error('Failed to create room'))
           })
         })
       },
 
       joinRoom: async (roomId, userName) => {
         console.log('Joining room', roomId, userName)
-        const { socket } = get()
+        const { socket, currentUser } = get()
         if (!socket) throw new Error('Not connected to socket')
+        if (!currentUser) throw new Error('User not authenticated')
 
         set({ isLoading: true })
 
-        return new Promise(resolve => {
+        return new Promise((resolve, reject) => {
           socket.emit('join_room', { roomId, userName })
 
           const timeout = setTimeout(() => {
             set({ isLoading: false })
-            throw new Error('Failed to join room')
+            reject(new Error('Failed to join room'))
           }, 5000)
 
           socket.once(
@@ -321,7 +384,8 @@ export const useRoomStore = create<RoomStore>()(
 
               if (!response.success || !response.data) {
                 console.error('Failed to join room:', response.error)
-                throw new Error('Failed to join room')
+                reject(new Error(response.error || 'Failed to join room'))
+                return
               }
               const { data } = response
               set({ currentRoom: data, lastRoomId: roomId })
@@ -329,10 +393,10 @@ export const useRoomStore = create<RoomStore>()(
             },
           )
 
-          socket.once('error', () => {
+          socket.once('error', error => {
             clearTimeout(timeout)
             set({ isLoading: false })
-            throw new Error('Failed to join room')
+            reject(new Error('Failed to join room'))
           })
         })
       },
@@ -342,26 +406,155 @@ export const useRoomStore = create<RoomStore>()(
         if (!socket) return
 
         socket.emit('leave_room')
-        set({ currentRoom: null })
+        set({ currentRoom: null, lastRoomId: null })
       },
 
-      emitVideoControl: (event, data) => {
-        const { socket } = get()
-        if (!socket) return
+      emitVideoPlay: (currentTime: number) => {
+        const { socket, currentRoom } = get()
+        if (!socket || !currentRoom) throw new Error('Not connected to socket')
 
-        socket.emit(event, data)
+        socket.emit('video_play', {
+          roomId: currentRoom.id,
+          currentTime,
+          timestamp: Date.now(),
+        })
+        set({ lastVideoAction: 'play' })
 
-        if (event === 'video_play') set({ lastVideoAction: 'play' })
-        else if (event === 'video_pause') set({ lastVideoAction: 'pause' })
-        else if (event === 'video_seek') set({ lastVideoAction: 'seek' })
+        return new Promise((resolve: (data: VideoState) => void, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Failed to emit video play'))
+          }, 2000)
+
+          socket.once(
+            'video_play_response',
+            ({ success, ...data }: VideoState & { success: boolean }) => {
+              console.log('Video play response', data)
+              clearTimeout(timeout)
+              if (!success) {
+                reject(new Error('Failed to emit video play'))
+                return
+              }
+              resolve(data)
+            },
+          )
+        })
       },
 
-      syncVideo: () => {
+      emitVideoPause: (currentTime: number) => {
+        const { socket, currentRoom } = get()
+        if (!socket || !currentRoom) throw new Error('Not connected to socket')
+
+        socket.emit('video_pause', {
+          roomId: currentRoom.id,
+          currentTime,
+          timestamp: Date.now(),
+        })
+        set({ lastVideoAction: 'pause' })
+
+        return new Promise((resolve: (data: VideoState) => void, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Failed to emit video pause'))
+          }, 2000)
+
+          socket.once(
+            'video_pause_response',
+            ({ success, ...data }: VideoState & { success: boolean }) => {
+              clearTimeout(timeout)
+              if (!success) {
+                reject(new Error('Failed to emit video pause'))
+                return
+              }
+              resolve(data)
+            },
+          )
+        })
+      },
+
+      emitVideoSeek: (
+        currentTime: number,
+        targetTime: number,
+        isPlaying: boolean,
+      ) => {
+        const { socket, currentRoom } = get()
+        if (!socket || !currentRoom) throw new Error('Not connected to socket')
+
+        socket.emit('video_seek', {
+          roomId: currentRoom.id,
+          currentTime,
+          targetTime,
+          timestamp: Date.now(),
+          isPlaying,
+        })
+        set({ lastVideoAction: 'seek' })
+
+        return new Promise((resolve: (data: VideoState) => void, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Failed to emit video seek'))
+          }, 2000)
+
+          socket.once(
+            'video_seek_response',
+            ({ success, ...data }: VideoState & { success: boolean }) => {
+              clearTimeout(timeout)
+              if (!success) {
+                reject(new Error('Failed to emit video seek'))
+                return
+              }
+              resolve(data)
+            },
+          )
+        })
+      },
+
+      emitVideoSeeked: (currentTime: number) => {
+        console.log('emitVideoSeeked', currentTime)
+        const { socket, currentRoom } = get()
+        if (!socket || !currentRoom) throw new Error('Not connected to socket')
+
+        socket.emit('video_seeked', {
+          roomId: currentRoom.id,
+          currentTime,
+          timestamp: Date.now(),
+        })
+        set({ lastVideoAction: 'seeked' })
+      },
+
+      syncVideo: async () => {
         const { socket } = get()
-        if (!socket) return
+        if (!socket) throw new Error('Not connected to socket')
 
         socket.emit('sync_video')
         set({ lastVideoAction: 'sync' })
+        return await waitForSocketResponse<{ success: boolean }>({
+          timeout: 2000,
+          socket,
+          event: 'video_sync_response',
+        })
+      },
+
+      emitVideoWaiting: (currentTime: number, isPlaying: boolean) => {
+        const { socket, currentRoom } = get()
+        if (!socket || !currentRoom) throw new Error('Not connected to socket')
+
+        console.log('Emitting video waiting', currentTime, isPlaying)
+
+        socket.emit('video_waiting', {
+          currentTime,
+          timestamp: Date.now(),
+          isPlaying,
+        })
+        set({ lastVideoAction: 'waiting' })
+      },
+
+      emitVideoCanPlay: (isPlaying: boolean) => {
+        const { socket, currentRoom } = get()
+        if (!socket || !currentRoom) throw new Error('Not connected to socket')
+        console.log('Emitting video canplay', isPlaying)
+
+        socket.emit('video_canplay', {
+          isPlaying,
+        })
+        set({ lastVideoAction: 'canplay' })
       },
 
       copyRoomId: () => {
@@ -370,14 +563,68 @@ export const useRoomStore = create<RoomStore>()(
 
         navigator.clipboard.writeText(currentRoom.id)
       },
+
+      getAvailableRooms: async () => {
+        const { socket } = get()
+        if (!socket) throw new Error('Not connected to socket')
+
+        set({ isLoading: true })
+        socket.emit('get_available_rooms')
+
+        return await waitForSocketResponse<{
+          success: boolean
+          data: SocketRoom[]
+        }>({
+          timeout: 2000,
+          socket,
+          event: 'available_rooms_response',
+        }).then(data => {
+          set({ availableRooms: data.data, isLoading: false })
+          return data.data
+        })
+      },
     }),
     {
       name: 'room-settings',
       partialize: state => ({
-        userName: state.userName,
+        currentUser: state.currentUser,
         currentRoom: state.currentRoom,
         lastRoomId: state.lastRoomId,
       }),
     },
   ),
 )
+
+async function waitForSocketResponse<T>({
+  timeout,
+  socket,
+  event,
+}: {
+  timeout: number
+  socket: Socket
+  event: string
+}): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error('Timeout'))
+    }, timeout)
+
+    socket.once(event, (data: T) => {
+      clearTimeout(timeoutId)
+      if (data && typeof data === 'object' && 'success' in data) {
+        if (!data.success) {
+          reject(new Error('Failed'))
+          return
+        }
+        resolve(data)
+        return
+      }
+      resolve(data)
+    })
+
+    socket.once('error', () => {
+      clearTimeout(timeoutId)
+      reject(new Error('Error'))
+    })
+  })
+}

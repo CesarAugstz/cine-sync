@@ -2,76 +2,47 @@ import { Socket } from 'socket.io'
 import { SocketUser } from './types'
 
 export class ConnectionManager {
-  private connections = new Map<string, Socket>()
-  private userSockets = new Map<string, string>()
+  private userSockets = new Map<string, Socket>()
 
-  getAllUserSockets(): Map<string, string> {
-    return this.userSockets
-  }
-
-  addConnection(socket: Socket, userId: string): void {
-    this.connections.set(socket.id, socket)
-    this.userSockets.set(userId, socket.id)
+  addConnection(userId: string, socket: Socket): void {
+    this.userSockets.set(userId, socket)
   }
 
   removeConnection(socketId: string): string | null {
-    this.connections.delete(socketId)
-    
-    for (const [userId, userSocketId] of this.userSockets.entries()) {
-      if (userSocketId === socketId) {
+    for (const [userId, socket] of this.userSockets.entries()) {
+      if (socket.id === socketId) {
         this.userSockets.delete(userId)
         return userId
       }
     }
-    
     return null
   }
 
-  getSocket(socketId: string): Socket | null {
-    return this.connections.get(socketId) || null
+  updateUserSocket(userId: string, socket: Socket): void {
+    this.userSockets.set(userId, socket)
   }
 
-  getSocketByUserId(userId: string): Socket | null {
-    const socketId = this.userSockets.get(userId)
-    if (!socketId) return null
-    return this.connections.get(socketId) || null
-  }
-
-  updateUserSocket(userId: string, newSocketId: string): void {
-    this.userSockets.set(userId, newSocketId)
+  getSocket(userId: string): Socket | null {
+    return this.userSockets.get(userId) || null
   }
 
   getUserIdBySocketId(socketId: string): string | null {
-    for (const [userId, userSocketId] of this.userSockets.entries()) {
-      if (userSocketId === socketId) return userId
+    for (const [userId, socket] of this.userSockets.entries()) {
+      if (socket.id === socketId) return userId
     }
     return null
   }
 
-  createUser(socketId: string, userName: string): SocketUser {
-    return {
-      id: `user_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-      name: userName,
-      socketId,
-      joinedAt: Date.now()
-    }
-  }
-
-  broadcastToRoom(roomUsers: SocketUser[], event: string, data: any, excludeSocketId?: string): void {
-    console.log('broadcastToRoom', event, data, excludeSocketId, roomUsers)
+  broadcastToRoom(
+    roomUsers: SocketUser[],
+    event: string,
+    data: any,
+    excludeSocketId?: string,
+  ): void {
     roomUsers.forEach(user => {
-      console.log('broadcastToRoom', {
-        user,
-        excludeSocketId,
-        match: user.socketId === excludeSocketId
-      })
       if (user.socketId === excludeSocketId) return
-      
-      const socket = this.connections.get(user.socketId)
-      console.log('broadcastToRoom', socket, {
-        connected: socket?.connected,
-        disconnected: socket?.disconnected
-      })
+
+      const socket = this.userSockets.get(user.id)
       if (socket) {
         socket.emit(event, data)
       }
@@ -79,18 +50,18 @@ export class ConnectionManager {
   }
 
   emitToUser(userId: string, event: string, data: any): boolean {
-    const socket = this.getSocketByUserId(userId)
+    const socket = this.getSocket(userId)
     if (!socket) return false
-    
+
     socket.emit(event, data)
     return true
   }
 
   getConnectionCount(): number {
-    return this.connections.size
+    return this.userSockets.size
   }
 
-  isUserConnected(userId: string): boolean {
-    return this.userSockets.has(userId)
+  getAllUserSockets(): Map<string, Socket> {
+    return this.userSockets
   }
 }

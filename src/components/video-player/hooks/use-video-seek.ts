@@ -1,3 +1,4 @@
+import { useRoomStore } from '@/stores/room-store'
 import { useRef, useCallback } from 'react'
 
 interface UseVideoSeekProps {
@@ -22,6 +23,8 @@ export function useVideoSeek({
   const lastSeekTimeRef = useRef<number>(0)
   const seekCountRef = useRef<number>(0)
   const isRecoveringRef = useRef<boolean>(false)
+  const currentRoom = useRoomStore(state => state.currentRoom)
+  const emitVideoSeeked = useRoomStore(state => state.emitVideoSeeked)
 
   const forceVideoRecovery = useCallback(
     (video: HTMLVideoElement) => {
@@ -128,6 +131,16 @@ export function useVideoSeek({
       setCurrentTime(video.currentTime)
       setIsSeeking(false)
 
+      console.log('[DEBUG] Emitting video seeked event', {
+        currentTime: video.currentTime,
+        readyState: video.readyState,
+        paused: video.paused,
+        videoWidth: video.videoWidth,
+        currentRoom,
+      })
+
+      if (currentRoom) return emitVideoSeeked(video.currentTime)
+
       if (!wasPlayingBeforeSeek) return
       console.log('[DEBUG] Resuming playback after seek')
       setTimeout(() => {
@@ -137,7 +150,13 @@ export function useVideoSeek({
           .catch(err => console.error('[DEBUG] Error resuming playback:', err))
       }, 100)
     },
-    [wasPlayingBeforeSeek, setCurrentTime, setIsSeeking],
+    [
+      setCurrentTime,
+      setIsSeeking,
+      currentRoom,
+      emitVideoSeeked,
+      wasPlayingBeforeSeek,
+    ],
   )
 
   const performSeek = useCallback(
@@ -192,7 +211,7 @@ export function useVideoSeek({
       video.currentTime = time
 
       setTimeout(() => {
-        forceVideoRecovery(video)
+        //   forceVideoRecovery(video)
       }, 50)
     },
     [isSeeking, setWasPlayingBeforeSeek, setIsSeeking, forceVideoRecovery],

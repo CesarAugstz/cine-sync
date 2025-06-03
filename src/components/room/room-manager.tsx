@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Users, Plus, UserPlus } from 'lucide-react'
 import RoomCreator from './room-creator'
@@ -15,17 +15,30 @@ export default function RoomManager() {
   const [currentView, setCurrentView] = useState<RoomView>('menu')
   const {
     currentRoom,
+    currentUser,
     isLoading,
+    isConnected,
+    connectSocket,
+    authenticateUser,
     createRoom,
     joinRoom,
     leaveRoom,
     copyRoomId,
   } = useRoomStore()
 
+  useEffect(() => {
+    if (!isConnected) {
+      connectSocket()
+    }
+  }, [isConnected, connectSocket])
+
   const handleCreateRoom = async (
     roomName: string,
     userName: string,
   ): Promise<SocketRoom> => {
+    if (!currentUser) {
+      await authenticateUser(undefined, userName)
+    }
     return await createRoom(roomName, userName)
   }
 
@@ -33,6 +46,9 @@ export default function RoomManager() {
     roomId: string,
     userName: string,
   ): Promise<SocketRoom> => {
+    if (!currentUser) {
+      await authenticateUser(undefined, userName)
+    }
     return await joinRoom(roomId, userName)
   }
 
@@ -42,6 +58,17 @@ export default function RoomManager() {
 
   const handleCopyRoomId = () => {
     copyRoomId()
+  }
+
+  if (!isConnected) {
+    return (
+      <div className="bg-card/50 rounded-lg p-6 space-y-4">
+        <div className="flex items-center space-x-2 mb-4">
+          <Users className="h-5 w-5" />
+          <h3 className="font-semibold">Connecting...</h3>
+        </div>
+      </div>
+    )
   }
 
   if (currentRoom) {
@@ -89,6 +116,11 @@ export default function RoomManager() {
       <div className="flex items-center space-x-2 mb-4">
         <Users className="h-5 w-5" />
         <h3 className="font-semibold">Watch Together</h3>
+        {currentUser && (
+          <span className="text-sm text-muted-foreground">
+            ({currentUser.name})
+          </span>
+        )}
       </div>
 
       <div className="space-y-3">

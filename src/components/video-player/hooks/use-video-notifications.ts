@@ -1,30 +1,28 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-
-interface NotificationState {
-  show: boolean
-  message: string
-  type: 'info' | 'success' | 'error'
-}
+import { useCallback } from 'react'
+import { toast } from 'sonner'
 
 export function useVideoNotifications() {
-  const [notification, setNotification] = useState<NotificationState>({
-    show: false,
-    message: '',
-    type: 'info'
-  })
-
-  const showNotification = useCallback((message: string, type: 'info' | 'success' | 'error' = 'info') => {
-    setNotification({ show: true, message, type })
-    
-    setTimeout(() => {
-      setNotification(prev => ({ ...prev, show: false }))
-    }, 3000)
-  }, [])
+  const showNotification = useCallback(
+    (message: string, type: 'info' | 'success' | 'error' = 'info') => {
+      console.log('showNotification', message, type)
+      switch (type) {
+        case 'info':
+          toast.info(message)
+          break
+        case 'success':
+          toast.success(message)
+          break
+        case 'error':
+          toast.error(message)
+          break
+      }
+    },
+    [],
+  )
 
   return {
-    notification,
-    showNotification
+    showNotification,
   }
 }
