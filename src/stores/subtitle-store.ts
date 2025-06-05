@@ -7,6 +7,7 @@ interface SubtitleSettings {
   color: string
   backgroundColor: string
   opacity: number
+  delay: number
 }
 
 interface SubtitleStore {
@@ -17,6 +18,8 @@ interface SubtitleStore {
   setCurrentLang: (lang: string) => void
   updateSettings: (settings: Partial<SubtitleSettings>) => void
   initializeLanguage: (availableLanguages: string[]) => void
+  adjustDelay: (seconds: number) => void
+  resetDelay: () => void
 }
 
 export const useSubtitleStore = create<SubtitleStore>()(
@@ -30,6 +33,7 @@ export const useSubtitleStore = create<SubtitleStore>()(
         color: '#ffffff',
         backgroundColor: '#000000',
         opacity: 0.7,
+        delay: 0,
       },
       setEnabled: (enabled) => set({ isEnabled: enabled }),
       setCurrentLang: (lang) => set({ currentLang: lang }),
@@ -43,6 +47,17 @@ export const useSubtitleStore = create<SubtitleStore>()(
           set({ currentLang: availableLanguages[0] })
         }
       },
+      adjustDelay: (seconds) =>
+        set((state) => ({
+          settings: {
+            ...state.settings,
+            delay: Math.round((state.settings.delay + seconds) * 100) / 100,
+          },
+        })),
+      resetDelay: () =>
+        set((state) => ({
+          settings: { ...state.settings, delay: 0 },
+        })),
     }),
     {
       name: 'subtitle-settings',

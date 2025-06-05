@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Settings } from 'lucide-react'
+import { Settings, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
@@ -38,11 +38,22 @@ export default function SubtitleSettings({ tracks }: SubtitleSettingsProps) {
     setEnabled,
     setCurrentLang,
     updateSettings,
+    adjustDelay,
+    resetDelay,
   } = useSubtitleStore()
 
   const fontFamilies = ['Arial', 'Helvetica', 'Times New Roman', 'Courier New', 'Verdana']
   const colors = ['#ffffff', '#ffff00', '#00ff00', '#ff0000', '#0000ff', '#ff00ff']
   const backgroundColors = ['#000000', '#ffffff', '#808080', '#ff0000', '#00ff00', '#0000ff']
+
+  const delayButtons = [
+    { label: '-2s', value: -2 },
+    { label: '-0.5s', value: -0.5 },
+    { label: '-0.2s', value: -0.2 },
+    { label: '+0.2s', value: 0.2 },
+    { label: '+0.5s', value: 0.5 },
+    { label: '+2s', value: 2 },
+  ]
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -55,7 +66,7 @@ export default function SubtitleSettings({ tracks }: SubtitleSettingsProps) {
           <Settings size={20} />
         </Button>
       </DialogTrigger>
-      <DialogContent className="bg-gray-900 border-gray-700 text-white max-w-md">
+      <DialogContent className="bg-gray-900 border-gray-700 text-white max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Subtitle Settings</DialogTitle>
         </DialogHeader>
@@ -87,6 +98,42 @@ export default function SubtitleSettings({ tracks }: SubtitleSettingsProps) {
               </Select>
             </div>
           )}
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label>Subtitle Timing</Label>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={resetDelay}
+                className="text-gray-400 hover:text-white h-8 px-2"
+              >
+                <RotateCcw size={14} className="mr-1" />
+                Reset
+              </Button>
+            </div>
+            <div className="text-center">
+              <span className="text-sm text-gray-400">
+                Current delay: {settings.delay > 0 ? '+' : ''}{settings.delay}s
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {delayButtons.map((button) => (
+                <Button
+                  key={button.label}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => adjustDelay(button.value)}
+                  className="bg-gray-800 border-gray-600 hover:bg-gray-700 text-xs"
+                >
+                  {button.label}
+                </Button>
+              ))}
+            </div>
+            <div className="text-xs text-gray-500 text-center">
+              Negative values advance subtitles, positive values delay them
+            </div>
+          </div>
 
           <div className="space-y-2">
             <Label>Font Size: {settings.fontSize}px</Label>

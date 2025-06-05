@@ -7,8 +7,8 @@ export function useVideoSubtitles(
   subtitles: SubtitleTrack[],
 ) {
   const styleRef = useRef<HTMLStyleElement | null>(null)
-  const { isEnabled, currentLang, settings, initializeLanguage } =
-    useSubtitleStore()
+  const originalTimingsRef = useRef<Map<string, { start: number; end: number }[]>>(new Map())
+  const { isEnabled, currentLang, settings, initializeLanguage } = useSubtitleStore()
 
   useEffect(() => {
     if (!subtitles.length) return
@@ -23,10 +23,54 @@ export function useVideoSubtitles(
     const tracks = video.textTracks
     for (let i = 0; i < tracks.length; i++) {
       const track = tracks[i]
-      track.mode =
-        track.language === currentLang && isEnabled ? 'showing' : 'hidden'
+      track.mode = track.language === currentLang && isEnabled ? 'showing' : 'hidden'
     }
   }, [isEnabled, currentLang, subtitles, videoRef])
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !isEnabled) return
+
+    const applyDelayToTrack = (track: TextTrack) => {
+      if (!track.cues) return
+      
+      const trackId = track.language || 'default'
+      let originalTimings = originalTimingsRef.current.get(trackId)
+      
+      if (!originalTimings) {
+        originalTimings = []
+        for (let i = 0; i < track.cues.length; i++) {
+          const cue = track.cues[i] as VTTCue
+          originalTimings.push({ start: cue.startTime, end: cue.endTime })
+        }
+        originalTimingsRef.current.set(trackId, originalTimings)
+      }
+
+      for (let i = 0; i < track.cues.length; i++) {
+        const cue = track.cues[i] as VTTCue
+        const original = originalTimings[i]
+        if (!original) continue
+        
+        cue.startTime = Math.max(0, original.start + settings.delay)
+        cue.endTime = Math.max(0, original.end + settings.delay)
+      }
+    }
+
+    const handleTrackLoad = (track: TextTrack) => {
+      if (track.language !== currentLang) return
+      
+      if (track.cues && track.cues.length > 0) {
+        applyDelayToTrack(track)
+      } else {
+        track.addEventListener('load', () => applyDelayToTrack(track), { once: true })
+      }
+    }
+
+    const tracks = video.textTracks
+    for (let i = 0; i < tracks.length; i++) {
+      handleTrackLoad(tracks[i])
+    }
+  }, [settings.delay, currentLang, isEnabled, videoRef])
 
   useEffect(() => {
     if (styleRef.current) {

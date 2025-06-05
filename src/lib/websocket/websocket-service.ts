@@ -149,11 +149,12 @@ export class WebSocketService {
     socket: Socket,
     payload: AuthenticateUserPayload,
   ): void {
+    const username =
+      payload.userName ||
+      `Anonymous-${socket.id.slice(0, 2)}-${socket.id.slice(-2)}`
+
     if (!payload.userId) {
-      const newUser = this.userManager.createUser(
-        socket.id,
-        payload.userName || 'Anonymous',
-      )
+      const newUser = this.userManager.createUser(socket.id, username)
       this.connectionManager.addConnection(newUser.id, socket)
 
       socket.emit('authenticate_user_response', {
@@ -165,10 +166,7 @@ export class WebSocketService {
 
     const existingUser = this.userManager.getUser(payload.userId)
     if (!existingUser) {
-      const newUser = this.userManager.createUser(
-        socket.id,
-        payload.userName || 'Anonymous',
-      )
+      const newUser = this.userManager.createUser(socket.id, username)
       this.connectionManager.addConnection(newUser.id, socket)
 
       socket.emit('authenticate_user_response', {
